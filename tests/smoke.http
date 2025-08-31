@@ -1,0 +1,7 @@
+### Smoke test (use VS Code REST Client or similar)
+POST http://localhost:8000/support-query
+Content-Type: application/json
+
+{
+  "query": "My drone won't connect to the app"
+}

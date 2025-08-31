@@ -1,0 +1,17 @@
+# Drone Getting Started (Product A)
+
+## App Pairing Basics
+- Ensure your mobile device's Bluetooth is ON.
+- The drone should be powered on and within 2 meters of the phone.
+- Open the Innovate Inc. mobile app and navigate to: Settings → Devices → Add Drone.
+- When prompted, allow the app to access Bluetooth and Location.
+- First-time pairing may take up to 30 seconds.
+
+## Power & Battery
+- Charge the battery fully before first use (LED turns solid green).
+- If LEDs flash red, battery is under 15% — pair near a charger or replace the pack.
+- Power cycle: turn the drone OFF, wait 10 seconds, turn it ON.
+
+## Factory Reset
+- Hold the power button for 12 seconds until LEDs blink blue-green.
+- After reset, re-pair the drone via the app.

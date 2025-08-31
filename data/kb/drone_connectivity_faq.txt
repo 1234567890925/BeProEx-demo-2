@@ -1,0 +1,21 @@
+# Drone Connectivity FAQ
+
+Q1: The drone won't connect to the app.
+A1:
+1) Confirm Bluetooth is enabled on the phone.
+2) Make sure no other phone is paired with the drone; if paired, unpair from that phone.
+3) Power cycle both the drone and the phone.
+4) In the app, go to Settings → Devices and remove old entries for the drone.
+5) Retry pairing within 2 meters; avoid strong Wi‑Fi interference sources (routers, microwaves).
+
+Q2: The app can see the drone, but pairing fails at 90%.
+A2:
+- Update the app to the latest version.
+- Check if phone OS has pending Bluetooth permissions.
+- If it still fails, perform a factory reset on the drone and pair again.
+
+Q3: Video feed is laggy after pairing.
+A3:
+- Ensure the battery is above 30%.
+- Avoid congested 2.4 GHz environments; switch the app's stream quality to 'Auto'.
+- Keep direct line-of-sight within 20 meters.
