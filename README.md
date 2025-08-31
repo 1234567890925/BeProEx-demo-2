@@ -1,4 +1,4 @@
-# BeProEx AI Support — No-LangChain Edition
+## BeProEx AI Support —
 
 Take-Home Assessment: AI Customer Support Agent.
 
