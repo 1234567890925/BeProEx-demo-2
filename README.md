@@ -1,123 +1,163 @@
-# BeProEx – AI Customer Support Agent (Multi‑Agent RAG)
+# BeProEx AI Support — No-LangChain Edition
 
-A three‑agent FastAPI system that ingests product manuals/FAQs, retrieves relevant chunks from MongoDB, and crafts friendly, grounded support replies.
+Take-Home Assessment: AI Customer Support Agent.
 
-## Architecture (Triage → Technical → Communication)
+This repository contains a small but complete AI support backend that I wrote to be transparent and easy to reason about. It accepts a single question from a user, decides whether the question is technical or not, looks up relevant information from a local knowledge base, asks a language model to draft a solution, and then rewrites that solution so a customer can understand it without any jargon. I am intentionally not using LangChain here so that every step is visible in normal Python, and you can see exactly what is happening.
 
-1) **Triage Specialist**: rewrites vague user text into a precise, searchable technical query.  
-2) **Technical Expert**: RAG core – retrieves top‑K chunks from MongoDB using vector search (Atlas or fallback cosine) and drafts a factual solution.  
-3) **Communication Specialist**: turns the draft into an empathetic, step‑by‑step customer answer with zero fabrication beyond sources.
+## What actually happens when you send a request
+
+When you send a POST request to /support-query with a JSON body that contains a single field named "query", FastAPI receives the request and validates the payload against a Pydantic model. If the payload is valid, the application passes the query string into a small routing function. That routing function asks the language model a very constrained question: it only needs to say whether this query should be handled as a technical issue or as a general communication. I keep this step minimal on purpose because it keeps the downstream behavior predictable.
+
+If the router says that the query is technical, the code collects context before drafting any response. It looks inside the data/kb directory, reads the text files, and prepares short snippets that are related to the user’s question. If you enable the optional MongoDB mode, the code instead queries a vector index in MongoDB or Atlas; this returns the top K snippets already sorted by similarity to the query. The program does not show raw embeddings to you; it only uses them to choose which sentences are most likely to help. The selected snippets are then fed to the language model with clear instructions to propose a step-by-step solution that a support engineer would be comfortable sending to a colleague.
+
+Regardless of whether the query was technical or not, the program then runs a final rewrite pass. This pass asks the model to take the existing draft and turn it into a short, polite message that a customer will find clear and actionable. The rewrite step deliberately avoids internal jargon and preserves the actual steps. Finally, the FastAPI endpoint returns a JSON response that contains the final_answer along with a list of sources so you can see what material informed the draft.
 
 ---
 
-## Quick Start
+## Project layout
 
-### 0) Clone & set up env
-```bash
-cp .env.example .env
-# edit .env with your keys / settings
+I built this in a sequence of small, understandable steps. Routing is separated from solution drafting so that the model only has to make one decision at a time. Retrieval is separated from drafting so that you can swap in a different retrieval method without altering the prompt. The final rewrite is separated from drafting so that we do not mix customer tone with technical correctness. These boundaries make testing simpler and they make failures easier to diagnose.
+---
+
+## Tech used
+
+- Python 3.12+
+- FastAPI
+- Uvicorn
+- Pydantic
+- OpenAI Python SDK
+- Database: MongoDB or Atlas Vector Search (via scripts/ingest.py)
+- Testing: Postman or curl for testing
+
+---
+
+## Setup
+
+1) Create .env (do not commit it)
+```
+OPENAI_API_KEY=sk-***
+LLM_MODEL=gpt-4o-mini
+LLM_TEMPERATURE=0.2
+
+# Mongo/Atlas (only if you want vector search)
+MONGODB_URI=mongodb://localhost:27017
+MONGO_DB=beproex
+MONGO_COLLECTION=kb
+USE_ATLAS_VECTOR_SEARCH=false
+TOP_K=4
 ```
 
-### 1) Start MongoDB (local)
+2) Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+3) Optional: start Mongo locally
 ```bash
 docker compose up -d
 ```
 
-### 2) Install deps & run ingestion
+4) Optional: ingest KB into Mongo (only if USE_ATLAS_VECTOR_SEARCH=true)
+Run from project root so Python can import app.*
 ```bash
-python -m venv .venv && source .venv/bin/activate  # (Windows: .venv\Scripts\activate)
-pip install -r requirements.txt
-
-# put your .txt manuals/FAQs in data/kb/
-python scripts/ingest.py
+python -m scripts.ingest
 ```
 
-### 3) Run the API
+---
+
+## Run the server
+
 ```bash
-uvicorn app.main:app --reload --port ${PORT:-8000}
-```
-
-### 4) Test the endpoint
-```bash
-curl -s -X POST "http://localhost:8000/support-query"       -H "Content-Type: application/json"       -d '{"query": "My new drone will not connect to the app"}' | jq .
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 ---
 
-## MongoDB Vector Search (Atlas) – optional but recommended
-If you host your collection on Atlas, set `USE_ATLAS_VECTOR_SEARCH=true` in `.env`, then create a vector search index (replace db/collection names if needed):
+## Testing
 
-```jsonc
-{
-  "fields": [
-    {
-      "type": "vector",
-      "path": "embedding",
-      "numDimensions": 384,     // all-MiniLM-L6-v2
-      "similarity": "cosine"
-    },
-    { "type": "string", "path": "source" }
-  ]
-}
-```
 
-The app will auto‑detect this setting and use `$vectorSearch`. If `false`, it falls back to fetching embeddings and computing cosine similarities in Python (fine for small KBs).
 
----
-
-## Files & Folders
-
-```
-app/
-  main.py
-  config.py
-  agents/
-    __init__.py
-    llm.py
-    triage.py
-    technical.py
-    communication.py
-    utils.py
-  models/
-    __init__.py
-    io.py
-scripts/
-  ingest.py
-data/kb/
-  drone_getting_started.txt
-  drone_connectivity_faq.txt
-docker-compose.yml
-requirements.txt
-.env.example
-README.md
-```
-
----
-
-## Notes
-- Embeddings use **sentence-transformers/all‑MiniLM‑L6‑v2** (open‑source).
-- LLM defaults to **OpenAI** (`LLM_MODEL=gpt-4o-mini`) – change in `.env`.
-- Grounding: the Communication agent is instructed not to invent facts beyond the retrieved sources. If coverage is insufficient, it will ask for clarifying info.
-
----
-
-## Example Response
+Postman
+- Method: POST
+- URL: http://127.0.0.1:8000/support-query
+- Body: raw JSON
 ```json
 {
-  "final_answer": "Sorry you're hitting pairing issues. Let's fix it...",
-  "sources": [
-    "Section: App Pairing Basics — Ensure Bluetooth is on... [drone_getting_started.txt#0]",
-    "Troubleshooting Wi‑Fi/Bluetooth conflicts... [drone_connectivity_faq.txt#1]"
-  ]
+  "query": "My new drone will not connect to the app"
+}
+```
+
+curl
+```bash
+curl -X POST "http://127.0.0.1:8000/support-query"   -H "Content-Type: application/json"   -d '{"query":"Drone WiFi connect nahi ho raha"}'
+```
+
+Expected response (shape):
+```json
+{
+  "final_answer": "polite, actionable steps",
+  "sources": ["snippet or filename ref"]
 }
 ```
 
 ---
 
-## Local Dev Tips
-- Regenerate embeddings anytime you update files in `data/kb/` by re‑running `scripts/ingest.py`.
-- You may seed more domain docs; everything is plain `.txt`.
-- For production, consider: auth for the API, request logging, rate limits, vector DB indexes, and async batching for retrieval.
-# BeProEx-demo-2
-# BeProEx-demo-2
-# BeProEx-demo-2
+## How it works
+
+1) Triage (app/agents/triage.py)  
+   A short system prompt asks the model to label the query (TECH or COMM).
+
+2) Technical draft (app/agents/technical.py)  
+   - If USE_ATLAS_VECTOR_SEARCH=false, embed or keyword-score local KB files, compute cosine similarity, pick top-K snippets.
+   - If USE_ATLAS_VECTOR_SEARCH=true, query Mongo/Atlas vector index (after scripts/ingest.py) for top-K results.
+   - Prompt the model to produce a clear, step-by-step solution grounded in those snippets.
+
+3) Customer rewrite (app/agents/communication.py)  
+   Turn the draft into a clear, courteous, and concise customer reply. Preserve sources for transparency.
+
+4) LLM client (app/agents/llm.py)  
+    small wrapper around the OpenAI SDK:
+   ```python
+   resp = client.chat.completions.create(
+       model=self.model, temperature=self.temperature,
+       messages=[{"role": "system", "content": system},
+                 {"role": "user", "content": user}]
+   )
+   ```
+
+---
+
+## Challenges Faced
+
+- Ensuring all runs are from project root — relative imports break otherwise.
+- Dealing with stdlib name collisions (e.g., `io`, `json`) when structuring modules.
+- Keeping imports consistent — mixing relative and package-style imports caused confusion.
+- Running scripts reliably: some required `python -m` invocation to resolve dependencies.
+- Handling ingestion quirks — ensuring paths and data formats stayed consistent across runs.
+
+---
+
+## Common errors I faced
+
+- ModuleNotFoundError: No module named 'app'  
+  Run from project root or use python -m scripts.ingest.
+
+- ImportError: cannot import name 'SupportQuery' from 'io'  
+  You imported Python’s stdlib io. Use from app.models.io import SupportQuery.
+
+- OPENAI_API_KEY is missing :')
+  Add it to .env and do not commit the file.
+
+- GitHub push blocked by secret scanning  
+  Remove secrets from commits, rotate any leaked keys, and push again. Keep .env in .gitignore.
+
+---
+
+## Quick checklist
+
+- .env has a valid OPENAI_API_KEY
+- Optional: Mongo up, USE_ATLAS_VECTOR_SEARCH=true, and python -m scripts.ingest
+- Run: python -m uvicorn app.main:app --reload --port 8000
+- Test: POST /support-query in Postman or curl
+
+Good to go.
