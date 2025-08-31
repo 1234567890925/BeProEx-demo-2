@@ -137,22 +137,6 @@ Expected response (shape):
 
 ---
 
-## Common errors I faced
-
-- ModuleNotFoundError: No module named 'app'  
-  Run from project root or use python -m scripts.ingest.
-
-- ImportError: cannot import name 'SupportQuery' from 'io'  
-  You imported Python’s stdlib io. Use from app.models.io import SupportQuery.
-
-- OPENAI_API_KEY is missing :')
-  Add it to .env and do not commit the file.
-
-- GitHub push blocked by secret scanning  
-  Remove secrets from commits, rotate any leaked keys, and push again. Keep .env in .gitignore.
-
----
-
 ## Quick checklist
 
 - .env has a valid OPENAI_API_KEY
